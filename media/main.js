@@ -9,6 +9,7 @@
   const consoleEl = document.getElementById("console");
   const runBtn = document.getElementById("run");
   const stopBtn = document.getElementById("stopRun");
+  const recordBtn = document.getElementById("record");
   const saveBtn = document.getElementById("save");
   const loadBtn = document.getElementById("load");
   const deviceSelect = document.getElementById("deviceSelect");
@@ -80,6 +81,31 @@
   function setRunning(running) {
     runBtn.disabled = running;
     stopBtn.disabled = !running;
+  }
+
+  // ---- record mode ----------------------------------------------------------
+
+  let recording = false;
+
+  function setRecording(value) {
+    recording = value;
+    recordBtn.setAttribute("aria-pressed", String(recording));
+    screenWrap.classList.toggle("recording", recording);
+    deviceStatus.textContent = recording
+      ? "Recording: gestures are appended to the script"
+      : "";
+  }
+
+  recordBtn.addEventListener("click", () => setRecording(!recording));
+
+  function appendStep(text) {
+    const current = editor.value;
+    editor.value =
+      current.length === 0 || current.endsWith("\n")
+        ? current + text + "\n"
+        : current + "\n" + text + "\n";
+    editor.scrollTop = editor.scrollHeight;
+    saveState();
   }
 
   // ---- devices --------------------------------------------------------------
@@ -202,8 +228,11 @@
         y: start.point.y,
       };
     }
+    message.record = recording;
     vscode.postMessage(message);
-    deviceStatus.textContent = describeGesture(message);
+    if (!recording) {
+      deviceStatus.textContent = describeGesture(message);
+    }
   });
 
   screen.addEventListener("pointercancel", () => {
@@ -358,6 +387,9 @@
             "err"
           );
         }
+        break;
+      case "recordedStep":
+        appendStep(message.text);
         break;
       case "gestureError":
         deviceStatus.textContent = "gesture failed: " + message.message;

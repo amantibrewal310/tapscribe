@@ -1,7 +1,7 @@
 import { ChildProcess } from "child_process";
 import * as vscode from "vscode";
 import { AdbClient } from "./adb";
-import { parseScript, Step } from "./script/parser";
+import { parseScript, stepToSource, Step } from "./script/parser";
 import { ScriptRunner } from "./script/runner";
 
 interface GestureMessage {
@@ -12,6 +12,8 @@ interface GestureMessage {
   x2?: number;
   y2?: number;
   durationMs?: number;
+  /** True while record mode is on: the gesture also becomes a script step. */
+  record?: boolean;
 }
 
 function getNonce(): string {
@@ -219,6 +221,9 @@ export class TestLabPanel {
       } else if (step.kind === "swipeCoords") {
         await this.adb.swipe(step.x1, step.y1, step.x2, step.y2, step.durationMs);
       }
+      if (message.record) {
+        this.post({ type: "recordedStep", text: stepToSource(step) });
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.post({ type: "gestureError", message: detail });
@@ -356,6 +361,7 @@ export class TestLabPanel {
         <div class="toolbar">
           <button id="run" class="primary">Run</button>
           <button id="stopRun" disabled>Stop</button>
+          <button id="record" aria-pressed="false" title="While on, taps and swipes on the device screen are appended to the script">Record</button>
           <button id="save">Save</button>
           <button id="load">Load</button>
         </div>
@@ -367,7 +373,10 @@ wait 1s
 tap 540 1200
 type &quot;hello world&quot;
 press enter
-swipe up"></textarea>
+swipe up
+
+# Or turn on Record and tap the device screen:
+# every gesture lands here as a step."></textarea>
       <div id="console" class="console" aria-live="polite"></div>
     </section>
     <section class="pane device-pane">
