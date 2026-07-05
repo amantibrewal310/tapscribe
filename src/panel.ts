@@ -111,6 +111,7 @@ export class TestLabPanel {
         this.adb.setDevice(message.serial || undefined);
         this.screenFailures = 0;
         this.restartLogcat();
+        void this.wakeDevice();
         break;
       case "run":
         await this.runScript(String(message.script ?? ""));
@@ -138,6 +139,19 @@ export class TestLabPanel {
     }
   }
 
+  private async wakeDevice(): Promise<void> {
+    // Emulator and phone displays sleep after a while; a black screenshot
+    // reads as a broken panel. Waking is harmless if already awake.
+    if (!this.adb.device) {
+      return;
+    }
+    try {
+      await this.adb.key("KEYCODE_WAKEUP");
+    } catch {
+      // Screen capture will surface real device errors; ignore this one.
+    }
+  }
+
   private async refreshDevices(): Promise<void> {
     try {
       const devices = (await this.adb.listDevices()).filter(
@@ -146,6 +160,7 @@ export class TestLabPanel {
       if (!this.adb.device || !devices.some((d) => d.serial === this.adb.device)) {
         this.adb.setDevice(devices[0]?.serial);
         this.restartLogcat();
+        void this.wakeDevice();
       }
       this.post({ type: "devices", devices, selected: this.adb.device });
       if (!this.logcat && this.adb.device) {
@@ -355,6 +370,7 @@ export class TestLabPanel {
 </head>
 <body data-log-buffer="${logBufferLines}">
   <main class="layout">
+    <div class="stack">
     <section class="pane script-pane">
       <header class="pane-header">
         <h2>Test script</h2>
@@ -380,18 +396,6 @@ swipe up
 # every gesture lands here as a step."></textarea>
       <div id="console" class="console" aria-live="polite"></div>
     </section>
-    <section class="pane device-pane">
-      <header class="pane-header">
-        <select id="deviceSelect" title="Connected device"></select>
-        <button id="refreshDevices">Refresh</button>
-      </header>
-      <div id="screenWrap" class="screen-wrap">
-        <img id="screen" alt="Device screen" draggable="false">
-        <div id="screenOverlay" class="screen-overlay">Waiting for a device.
-Start an emulator or plug in a phone, then hit Refresh.</div>
-      </div>
-      <footer id="deviceStatus" class="status"></footer>
-    </section>
     <section class="pane log-pane">
       <header class="pane-header">
         <h2>Logcat</h2>
@@ -409,6 +413,19 @@ Start an emulator or plug in a phone, then hit Refresh.</div>
         </div>
       </header>
       <div id="logs" class="logs"></div>
+    </section>
+    </div>
+    <section class="pane device-pane">
+      <header class="pane-header">
+        <select id="deviceSelect" title="Connected device"></select>
+        <button id="refreshDevices">Refresh</button>
+      </header>
+      <div id="screenWrap" class="screen-wrap">
+        <img id="screen" alt="Device screen" draggable="false">
+        <div id="screenOverlay" class="screen-overlay">Waiting for a device.
+Start an emulator or plug in a phone, then hit Refresh.</div>
+      </div>
+      <footer id="deviceStatus" class="status"></footer>
     </section>
   </main>
   <script nonce="${nonce}" src="${scriptUri}"></script>

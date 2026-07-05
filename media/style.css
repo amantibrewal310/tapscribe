@@ -15,9 +15,21 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(220px, auto) minmax(280px, 1.2fr);
+  /* Editor and logcat stack 50/50 on the left; the device screen gets its
+     own column on the right, sized fractionally so the screenshot's natural
+     width (1080px+) cannot crush the other panes. */
+  grid-template-columns: minmax(380px, 1.6fr) minmax(220px, 1fr);
   gap: 1px;
   height: 100vh;
+  background: var(--vscode-panel-border, #444);
+}
+
+.stack {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  min-width: 0;
+  min-height: 0;
   background: var(--vscode-panel-border, #444);
 }
 
@@ -25,6 +37,7 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: var(--vscode-editor-background);
 }
 
@@ -169,6 +182,10 @@ select {
   user-select: none;
   -webkit-user-drag: none;
   border-radius: 6px;
+  /* A dark screenshot on a dark theme is indistinguishable from an empty
+     pane without a visible frame. */
+  border: 1px solid var(--vscode-panel-border, #555);
+  background: #000;
   display: none;
 }
 
@@ -209,12 +226,15 @@ select {
 /* Log pane */
 
 .log-pane .toolbar {
+  /* Full row of its own; sharing a row with the heading crushes the
+     controls in narrow panes. */
   margin-left: 0;
-  flex: 1;
+  flex: 1 0 100%;
 }
 
 #logFilter {
   flex: 1;
+  min-width: 60px;
 }
 
 .follow {
