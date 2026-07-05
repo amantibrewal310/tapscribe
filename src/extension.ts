@@ -9,7 +9,7 @@ export function activate(context: vscode.ExtensionContext) {
   console.log("Android Emulator Extension is now active");
 
   let showEmulatorCommand = vscode.commands.registerCommand(
-    "app-testing-vscode-extension.showEmulator",
+    "tapscribe.openTestLab",
     () => {
       if (emulatorPanel) {
         emulatorPanel.reveal();

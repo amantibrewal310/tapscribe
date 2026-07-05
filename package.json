@@ -1,23 +1,33 @@
 {
-  "name": "app-testing-vscode-extension",
-  "displayName": "app-testing-vscode-extension",
-  "description": "",
-  "version": "0.0.1",
+  "name": "tapscribe",
+  "displayName": "TapScribe",
+  "description": "Write mobile UI tests in plain English or record them by tapping the emulator screen, with live device video and logcat side by side.",
+  "version": "0.1.0",
+  "publisher": "amantibrewal",
+  "license": "MIT",
+  "author": {
+    "name": "Aman Tibrewal"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amantibrewal310/app-testing-vscode-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amantibrewal310/app-testing-vscode-extension/issues"
+  },
   "engines": {
     "vscode": "^1.98.0"
   },
   "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onCommand:app-testing-vscode-extension.showEmulator"
+    "Testing"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "app-testing-vscode-extension.showEmulator",
-        "title": "Show Android Emulator"
+        "command": "tapscribe.openTestLab",
+        "category": "TapScribe",
+        "title": "Open Test Lab"
       }
     ]
   },
