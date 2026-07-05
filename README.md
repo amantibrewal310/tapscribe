@@ -3,21 +3,25 @@
 [![ci](https://github.com/amantibrewal310/tapscribe/actions/workflows/ci.yml/badge.svg)](https://github.com/amantibrewal310/tapscribe/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Write and debug Android UI tests without leaving VS Code. TapScribe puts three things side by side in one editor tab: your test script, a live view of the device screen, and logcat.
+Write and debug Android UI tests without leaving VS Code. TapScribe puts three things in one editor tab: your test script, a live view of the device screen, and logcat.
 
 The part that saves real time: the screen is interactive, and it can write your script for you. Turn on Record, use your app by clicking and dragging on the screen view, and every gesture is appended to the script as a step. Hit Run to play the whole thing back.
 
 ```
-+--------------------+---------------------+----------------------+
-|  Test script       |  Device screen      |  Logcat              |
-|                    |                     |                      |
-|  launch com.my.app |   [live emulator    |  I/MyApp: started    |
-|  wait 1s           |    screen, click    |  D/Auth: token ok    |
-|  tap 540 1200      |    to tap, drag     |  E/Net: timeout ...  |
-|  type "hello"      |    to swipe]        |                      |
-|  press enter       |                     |  filter + levels     |
-|  run output below  |                     |                      |
-+--------------------+---------------------+----------------------+
++------------------------------------+---------------------+
+|  Test script                       |  Device screen      |
+|                                    |                     |
+|  launch com.my.app                 |   [live emulator    |
+|  wait 1s                           |    screen: click    |
+|  tap 540 1200                      |    to tap, drag     |
+|  press enter          + run output |    to swipe, hold   |
++------------------------------------+    to long-press]   |
+|  Logcat                            |                     |
+|                                    |                     |
+|  I/MyApp: started                  |                     |
+|  D/Auth: token ok                  |                     |
+|  E/Net: timeout   + filter, levels |                     |
++------------------------------------+---------------------+
 ```
 
 ## Requirements
