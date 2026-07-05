@@ -243,6 +243,17 @@
     gestureStart = undefined;
   });
 
+  // Android navigation bar: back, home, recents.
+  for (const btn of document.querySelectorAll(".nav-btn")) {
+    btn.addEventListener("click", () => {
+      vscode.postMessage({
+        type: "navKey",
+        key: btn.dataset.key,
+        record: recording,
+      });
+    });
+  }
+
   function describeGesture(message) {
     if (message.gesture === "swipe") {
       return (

@@ -74,9 +74,9 @@
         },
         "tapscribe.screenRefreshMs": {
           "type": "number",
-          "default": 800,
+          "default": 400,
           "minimum": 150,
-          "description": "How often the device screen refreshes, in milliseconds. Lower is smoother but works adb harder."
+          "description": "Delay between screen captures, in milliseconds, measured from the end of the previous capture. Lower is smoother but works adb harder."
         },
         "tapscribe.logBufferLines": {
           "type": "number",

@@ -1,6 +1,6 @@
 import { ChildProcess } from "child_process";
 import * as vscode from "vscode";
-import { AdbClient } from "./adb";
+import { AdbClient, KEY_MAP } from "./adb";
 import { parseScript, stepToSource, Step } from "./script/parser";
 import { ScriptRunner } from "./script/runner";
 
@@ -121,6 +121,10 @@ export class TestLabPanel {
         break;
       case "gesture":
         await this.onGesture(message as GestureMessage);
+        this.captureNow();
+        break;
+      case "navKey":
+        await this.onNavKey(String(message.key), Boolean(message.record));
         break;
       case "clearLogs":
         try {
@@ -198,8 +202,10 @@ export class TestLabPanel {
     const summary = await this.runner.run(steps, {
       onStepStart: (step, index, total) =>
         this.post({ type: "stepStart", index, total, line: step.line, source: step.source }),
-      onStepEnd: (step, index, ok, detail) =>
-        this.post({ type: "stepEnd", index, line: step.line, source: step.source, ok, detail }),
+      onStepEnd: (step, index, ok, detail) => {
+        this.post({ type: "stepEnd", index, line: step.line, source: step.source, ok, detail });
+        this.captureNow();
+      },
     });
     this.post({ type: "runFinished", ...summary });
   }
@@ -245,6 +251,23 @@ export class TestLabPanel {
     }
   }
 
+  private async onNavKey(key: string, record: boolean): Promise<void> {
+    const keycode = KEY_MAP[key];
+    if (!keycode || !this.adb.device) {
+      return;
+    }
+    try {
+      await this.adb.key(keycode);
+      if (record) {
+        this.post({ type: "recordedStep", text: `press ${key}` });
+      }
+      this.captureNow();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.post({ type: "gestureError", message: detail });
+    }
+  }
+
   private async saveScript(text: string): Promise<void> {
     const target = await vscode.window.showSaveDialog({
       filters: { "TapScribe script": ["taps"], "All files": ["*"] },
@@ -274,10 +297,35 @@ export class TestLabPanel {
 
   private restartScreenLoop(): void {
     if (this.screenTimer) {
-      clearInterval(this.screenTimer);
+      clearTimeout(this.screenTimer);
+      this.screenTimer = undefined;
     }
-    const interval = Math.max(150, this.config<number>("screenRefreshMs", 800));
-    this.screenTimer = setInterval(() => void this.captureScreen(), interval);
+    this.scheduleCapture(0);
+  }
+
+  private scheduleCapture(delayMs: number): void {
+    if (this.screenTimer) {
+      clearTimeout(this.screenTimer);
+    }
+    this.screenTimer = setTimeout(() => void this.captureLoopTick(), delayMs);
+  }
+
+  /**
+   * Self-scheduling capture: the next shot is timed from when the previous
+   * one finished, so a slow capture never stacks and a fast one keeps the
+   * configured cadence instead of a fixed timer's worst-case latency.
+   */
+  private async captureLoopTick(): Promise<void> {
+    const interval = Math.max(150, this.config<number>("screenRefreshMs", 400));
+    const started = Date.now();
+    await this.captureScreen();
+    const elapsed = Date.now() - started;
+    this.scheduleCapture(Math.max(50, interval - elapsed));
+  }
+
+  /** Captures immediately, used after gestures and steps for fast echo. */
+  private captureNow(): void {
+    this.scheduleCapture(0);
   }
 
   private async captureScreen(): Promise<void> {
@@ -425,6 +473,11 @@ swipe up
         <div id="screenOverlay" class="screen-overlay">Waiting for a device.
 Start an emulator or plug in a phone, then hit Refresh.</div>
       </div>
+      <nav class="nav-bar">
+        <button class="nav-btn" data-key="back" title="Back">&#9665;</button>
+        <button class="nav-btn" data-key="home" title="Home">&#9711;</button>
+        <button class="nav-btn" data-key="recents" title="Recent apps">&#9634;</button>
+      </nav>
       <footer id="deviceStatus" class="status"></footer>
     </section>
   </main>
@@ -438,7 +491,7 @@ Start an emulator or plug in a phone, then hit Refresh.</div>
     this.runner.stop();
     this.stopLogcat();
     if (this.screenTimer) {
-      clearInterval(this.screenTimer);
+      clearTimeout(this.screenTimer);
       this.screenTimer = undefined;
     }
     for (const d of this.disposables) {

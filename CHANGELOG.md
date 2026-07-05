@@ -13,7 +13,7 @@ First real release.
 - Test Lab: script editor, live device screen and logcat in one three-panel tab
 - Plain-English script language (tap, long press, swipe, type, press, wait, launch, stop) with raw adb passthrough
 - Record mode: gestures on the screen view run on the device and are written into the script as steps
-- Interactive screen view: click to tap, hold to long-press, drag to swipe
+- Interactive screen view: click to tap, hold to long-press, drag to swipe, with Back/Home/Recents buttons below
 - Logcat streaming with level filter, text filter, follow mode and a capped buffer
 - Device picker for multi-device setups
 - `.taps` files with syntax highlighting

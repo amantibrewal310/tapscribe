@@ -37,7 +37,7 @@ TapScribe talks to the device only through adb, so anything adb can reach works:
 1. Install the extension and start an emulator (or plug in a phone).
 2. Open the command palette and run **TapScribe: Open Test Lab**.
 3. Pick a device in the middle panel if you have more than one.
-4. Click around on the screen view. Clicks tap, drags swipe, holding clicks long-presses.
+4. Click around on the screen view. Clicks tap, drags swipe, holding clicks long-presses. The bar under the screen has Back, Home and Recents.
 5. Turn on **Record**, walk through the flow you want to test, and watch the steps appear in the editor.
 6. Press **Run** to play the script back. Step results show up under the editor; app logs stream on the right.
 
@@ -85,7 +85,7 @@ The right panel streams `adb logcat` for the selected device. You can filter by 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `tapscribe.adbPath` | `adb` | Path to the adb executable |
-| `tapscribe.screenRefreshMs` | `800` | Screen refresh interval in milliseconds. Lower is smoother but works adb harder |
+| `tapscribe.screenRefreshMs` | `400` | Delay between screen captures in milliseconds. Lower is smoother but works adb harder |
 | `tapscribe.logBufferLines` | `5000` | Maximum logcat lines kept in the panel |
 
 ## How it works

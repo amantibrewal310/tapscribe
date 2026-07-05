@@ -215,6 +215,27 @@ select {
   display: none;
 }
 
+.nav-bar {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  padding: 6px 0;
+  border-top: 1px solid var(--vscode-panel-border, #444);
+}
+
+.nav-btn {
+  background: transparent;
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px 14px;
+  opacity: 0.8;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground, #3a3d41);
+  opacity: 1;
+}
+
 .status {
   padding: 4px 10px;
   font-size: 11px;
