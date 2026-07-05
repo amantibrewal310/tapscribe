@@ -29,7 +29,29 @@
         "category": "TapScribe",
         "title": "Open Test Lab"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "TapScribe",
+      "properties": {
+        "tapscribe.adbPath": {
+          "type": "string",
+          "default": "adb",
+          "description": "Path to the adb executable. Leave as \"adb\" when it is on PATH."
+        },
+        "tapscribe.screenRefreshMs": {
+          "type": "number",
+          "default": 800,
+          "minimum": 150,
+          "description": "How often the device screen refreshes, in milliseconds. Lower is smoother but works adb harder."
+        },
+        "tapscribe.logBufferLines": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 100,
+          "description": "Maximum number of logcat lines kept in the log panel."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
