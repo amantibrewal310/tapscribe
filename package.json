@@ -30,6 +30,25 @@
         "title": "Open Test Lab"
       }
     ],
+    "languages": [
+      {
+        "id": "tapscribe",
+        "aliases": [
+          "TapScribe Script"
+        ],
+        "extensions": [
+          ".taps"
+        ],
+        "configuration": "./language/language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tapscribe",
+        "scopeName": "source.tapscribe",
+        "path": "./language/tapscribe.tmLanguage.json"
+      }
+    ],
     "configuration": {
       "title": "TapScribe",
       "properties": {

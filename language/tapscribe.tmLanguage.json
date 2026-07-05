@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "TapScribe Script",
+  "scopeName": "source.tapscribe",
+  "patterns": [
+    {
+      "name": "comment.line.number-sign.tapscribe",
+      "match": "^\\s*(#|//).*$"
+    },
+    {
+      "name": "keyword.control.tapscribe",
+      "match": "(?i)^\\s*(long\\s*press|tap|swipe|type|enter|press|wait|pause|launch|open|stop|close|adb)\\b"
+    },
+    {
+      "name": "keyword.other.tapscribe",
+      "match": "(?i)\\b(from|to|in|for|on|at|the|app)\\b"
+    },
+    {
+      "name": "constant.language.tapscribe",
+      "match": "(?i)\\b(up|down|left|right|back|home|menu|recents|search|power|space|delete|del|backspace|escape|tab|volume\\s+(up|down)|KEYCODE_[A-Z0-9_]+)\\b"
+    },
+    {
+      "name": "string.quoted.double.tapscribe",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [{ "name": "constant.character.escape.tapscribe", "match": "\\\\." }]
+    },
+    {
+      "name": "string.quoted.single.tapscribe",
+      "begin": "'",
+      "end": "'"
+    },
+    {
+      "name": "constant.numeric.tapscribe",
+      "match": "\\b\\d+(\\.\\d+)?(ms|s)?\\b"
+    },
+    {
+      "name": "entity.name.type.package.tapscribe",
+      "match": "\\b[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+\\b"
+    }
+  ]
+}
