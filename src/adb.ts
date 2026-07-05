@@ -179,17 +179,30 @@ export class AdbClient {
   }
 
   async launchApp(packageName: string): Promise<void> {
-    const out = await this.exec([
+    // monkey used to be the standard trick here, but it exits non-zero on
+    // recent images. Resolving the launcher activity and starting it with
+    // am works everywhere API 24+.
+    const resolved = await this.exec([
       "shell",
-      "monkey",
-      "-p",
-      packageName,
+      "cmd",
+      "package",
+      "resolve-activity",
+      "--brief",
       "-c",
       "android.intent.category.LAUNCHER",
-      "1",
+      packageName,
     ]);
-    if (/No activities found/i.test(out)) {
+    const lines = resolved
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const component = lines[lines.length - 1];
+    if (!component || !component.includes("/")) {
       throw new AdbError(`No launchable activity found for ${packageName}`);
+    }
+    const out = await this.exec(["shell", "am", "start", "-n", component]);
+    if (/^Error|does not exist/im.test(out)) {
+      throw new AdbError(out.trim());
     }
   }
 
@@ -210,9 +223,15 @@ export class AdbClient {
     onLines: (lines: string[]) => void,
     onError: (message: string) => void
   ): ChildProcess {
-    const proc = spawn(this.adbPath, this.withSerial(["logcat", "-v", "time"]), {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    // -T 300 starts from the most recent lines instead of replaying the whole
+    // device buffer, which can be tens of thousands of lines after boot.
+    const proc = spawn(
+      this.adbPath,
+      this.withSerial(["logcat", "-v", "time", "-T", "300"]),
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+      }
+    );
     let pending = "";
     proc.stdout.on("data", (chunk: Buffer) => {
       pending += chunk.toString("utf8");
