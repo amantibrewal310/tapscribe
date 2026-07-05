@@ -364,6 +364,7 @@ export class TestLabPanel {
           <button id="record" aria-pressed="false" title="While on, taps and swipes on the device screen are appended to the script">Record</button>
           <button id="save">Save</button>
           <button id="load">Load</button>
+          <button id="clearConsole" title="Clear the run output below the editor">Clear</button>
         </div>
       </header>
       <textarea id="editor" spellcheck="false"

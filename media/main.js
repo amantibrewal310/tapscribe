@@ -12,6 +12,7 @@
   const recordBtn = document.getElementById("record");
   const saveBtn = document.getElementById("save");
   const loadBtn = document.getElementById("load");
+  const clearConsoleBtn = document.getElementById("clearConsole");
   const deviceSelect = document.getElementById("deviceSelect");
   const refreshBtn = document.getElementById("refreshDevices");
   const screen = document.getElementById("screen");
@@ -77,6 +78,9 @@
     vscode.postMessage({ type: "saveScript", text: editor.value })
   );
   loadBtn.addEventListener("click", () => vscode.postMessage({ type: "loadScript" }));
+  clearConsoleBtn.addEventListener("click", () => {
+    consoleEl.textContent = "";
+  });
 
   function setRunning(running) {
     runBtn.disabled = running;
