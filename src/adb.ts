@@ -215,6 +215,40 @@ export class AdbClient {
   }
 
   /**
+   * Streams raw H.264 from the device's hardware encoder until the process
+   * exits, which screenrecord does on its own after three minutes. The
+   * caller owns restarts.
+   */
+  streamScreenrecord(
+    bitrateMbps: number,
+    onData: (bytes: Buffer) => void,
+    onExit: (code: number | null, stderr: string) => void
+  ): ChildProcess {
+    const bitrate = `${Math.max(1, Math.min(50, Math.round(bitrateMbps)))}M`;
+    const proc = spawn(
+      this.adbPath,
+      this.withSerial([
+        "exec-out",
+        "screenrecord",
+        "--output-format=h264",
+        `--bit-rate=${bitrate}`,
+        "-",
+      ]),
+      { stdio: ["ignore", "pipe", "pipe"] }
+    );
+    let stderr = "";
+    proc.stdout.on("data", onData);
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    proc.on("error", (error) => {
+      stderr += error.message;
+    });
+    proc.on("close", (code) => onExit(code, stderr.trim()));
+    return proc;
+  }
+
+  /**
    * Streams logcat lines until the returned process is killed. Lines arrive
    * in batches through onLines; adb writing partial lines across chunk
    * boundaries is handled here.

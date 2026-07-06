@@ -55,6 +55,22 @@ export class AnnexBParser {
     // and keeping the old ones lets a keyframe decode even if ordering is odd.
   }
 
+  /**
+   * Emits the trailing buffered NAL as if the stream had ended. screenrecord
+   * goes silent on a static screen, so the final frame of a burst never gets
+   * a next start code to terminate it; the caller flushes after a quiet gap.
+   */
+  flush(): VideoChunk[] {
+    const start = findStartCode(this.pending, 0);
+    if (start === -1) {
+      return [];
+    }
+    const nal = this.pending.subarray(start.index + start.length);
+    this.pending = Buffer.alloc(0);
+    const chunk = this.onNal(nal);
+    return chunk ? [chunk] : [];
+  }
+
   private *extractCompleteNals(): Generator<Buffer> {
     let start = findStartCode(this.pending, 0);
     while (start !== -1) {

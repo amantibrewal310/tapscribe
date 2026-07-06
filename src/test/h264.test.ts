@@ -90,6 +90,18 @@ suite("AnnexBParser", () => {
     assert.strictEqual(chunks[0].key, true);
   });
 
+  test("flush emits the trailing NAL after a quiet stream", () => {
+    const parser = new AnnexBParser();
+    // Static screen: SPS, PPS and a single IDR arrive, then silence.
+    const chunks = parser.push(buf(SC4, SPS, SC4, PPS, SC4, IDR));
+    assert.strictEqual(chunks.length, 0);
+    const flushed = parser.flush();
+    assert.strictEqual(flushed.length, 1);
+    assert.strictEqual(flushed[0].key, true);
+    // A second flush has nothing left to emit.
+    assert.deepStrictEqual(parser.flush(), []);
+  });
+
   test("garbage before the first start code is discarded", () => {
     const parser = new AnnexBParser();
     const noise = [0x12, 0x34, 0x56, 0x78, 0x9a];
