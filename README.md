@@ -85,14 +85,18 @@ The right panel streams `adb logcat` for the selected device. You can filter by 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `tapscribe.adbPath` | `adb` | Path to the adb executable |
-| `tapscribe.screenRefreshMs` | `400` | Delay between screen captures in milliseconds. Lower is smoother but works adb harder |
+| `tapscribe.screenMode` | `auto` | `video` streams H.264, `screenshots` polls screencap, `auto` picks video when supported |
+| `tapscribe.videoBitrateMbps` | `8` | Bitrate of the video stream |
+| `tapscribe.screenRefreshMs` | `400` | Screenshot mode only: delay between captures in milliseconds |
 | `tapscribe.logBufferLines` | `5000` | Maximum logcat lines kept in the panel |
 
 ## How it works
 
-There is no agent to install on the device. The screen view polls `adb exec-out screencap`, gestures run through `adb shell input`, and logs come from `adb logcat`. Every adb invocation goes through `execFile`/`spawn` with argument arrays, never through a shell string, and the webview runs under a strict content security policy with no remote content.
+There is no agent to install on the device. The screen view streams H.264 from `adb exec-out screenrecord` (the phone's own hardware encoder), which the extension splits into decoder-ready chunks and the webview decodes with WebCodecs onto a canvas. screenrecord stops itself every three minutes; TapScribe restarts it and the stream resumes on the next keyframe. On devices or editors where video is not available, it falls back to polling `adb exec-out screencap` screenshots. Gestures run through `adb shell input` and logs come from `adb logcat` in both modes.
 
-The script language lives in `src/script/parser.ts` as a small, dependency-free module. The runner (`src/script/runner.ts`) executes parsed steps against a driver interface, which is adb in production and a fake in tests.
+Every adb invocation goes through `execFile`/`spawn` with argument arrays, never through a shell string, and the webview runs under a strict content security policy with no remote content.
+
+The script language lives in `src/script/parser.ts` as a small, dependency-free module. The runner (`src/script/runner.ts`) executes parsed steps against a driver interface, which is adb in production and a fake in tests. The H.264 stream parsing lives in `src/video/h264.ts`, also pure and unit-tested.
 
 ## Development
 
@@ -103,10 +107,33 @@ npm run watch     # compile on change
 
 Press F5 in VS Code to launch an Extension Development Host. `npm test` runs the suite (it downloads a VS Code build on first run), and `npm run lint` checks the source.
 
+The design is documented in [docs/architecture.md](docs/architecture.md), and the reasoning behind the bigger choices (including the ones reversed after testing on a real emulator) lives in [docs/decisions/](docs/decisions/).
+
+## Troubleshooting
+
+**Typed text loses its first characters** (`battery` arrives as `tery`):
+the `type` step fires as soon as the previous step finishes, but Android
+needs a moment to focus a text field after you tap it, and keystrokes sent
+during that animation are dropped. Put a `wait 2s` between tapping a field
+and typing into it.
+
+**The screen view freezes or lags behind the device**: check the status
+line under the screen. In video mode it recovers on its own within a
+couple of seconds (the stream restarts to get a fresh keyframe); if it
+says screenshots, the device could not stream video and updates arrive at
+the polling rate instead.
+
+**"Video stream unavailable ...; using screenshots"**: the video decoder
+failed three times in a row and TapScribe stopped retrying for this
+session. Single hiccups recover automatically; the repeated-failure
+fallback keeps a broken encoder from flickering. To try video again,
+change any TapScribe setting or reopen the Test Lab.
+
 ## Limitations
 
 - `input text` handles ASCII only; emoji and non-Latin text will not type correctly
-- Screen capture is polling-based, so it is a viewer, not a 60 fps mirror
+- Rotating the device freezes the video stream until its next restart; toggle `tapscribe.screenMode` or reopen the panel to recover sooner
+- DRM-protected and other secure surfaces come out black, in both video and screenshot mode
 - Steps target coordinates, not UI elements, so a big layout change means re-recording (selector-based targeting via uiautomator is on the wishlist)
 
 ## License

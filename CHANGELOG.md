@@ -4,6 +4,18 @@ All notable changes to TapScribe are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [0.2.0] - 2026-07-06
+
+### Added
+
+- Live video for the device screen: H.264 from `screenrecord` decoded with WebCodecs, replacing screenshot polling as the default (#2)
+- `tapscribe.screenMode` (auto/video/screenshots) and `tapscribe.videoBitrateMbps` settings
+- Automatic fallback to screenshot polling when the device or editor cannot stream
+
+### Changed
+
+- Screenshot polling remains available and is now the explicit fallback path; `tapscribe.screenRefreshMs` applies only to it
+
 ## [0.1.0] - 2026-07-05
 
 First real release.

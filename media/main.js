@@ -16,6 +16,7 @@
   const deviceSelect = document.getElementById("deviceSelect");
   const refreshBtn = document.getElementById("refreshDevices");
   const screen = document.getElementById("screen");
+  const screenCanvas = document.getElementById("screenCanvas");
   const screenWrap = document.getElementById("screenWrap");
   const screenOverlay = document.getElementById("screenOverlay");
   const deviceStatus = document.getElementById("deviceStatus");
@@ -149,16 +150,25 @@
 
   // ---- device screen ----------------------------------------------------------
 
+  let screenMode = "screenshots";
+
+  // The active display surface and its bitmap dimensions: the img in
+  // screenshot mode, the canvas in video mode.
+  function activeSurface() {
+    if (screenMode === "video") {
+      return { el: screenCanvas, width: screenCanvas.width, height: screenCanvas.height };
+    }
+    return { el: screen, width: screen.naturalWidth, height: screen.naturalHeight };
+  }
+
   function contentRect() {
-    // The img uses object-fit: contain, so the rendered bitmap is centered
-    // inside the element box. Gestures must map to bitmap pixels.
-    const rect = screen.getBoundingClientRect();
-    const scale = Math.min(
-      rect.width / screen.naturalWidth,
-      rect.height / screen.naturalHeight
-    );
-    const width = screen.naturalWidth * scale;
-    const height = screen.naturalHeight * scale;
+    // Both surfaces render their bitmap letterbox-centered in the element
+    // box. Gestures must map to bitmap pixels.
+    const surface = activeSurface();
+    const rect = surface.el.getBoundingClientRect();
+    const scale = Math.min(rect.width / surface.width, rect.height / surface.height);
+    const width = surface.width * scale;
+    const height = surface.height * scale;
     return {
       left: rect.left + (rect.width - width) / 2,
       top: rect.top + (rect.height - height) / 2,
@@ -169,13 +179,14 @@
   }
 
   function toDeviceCoords(clientX, clientY) {
-    if (!screen.naturalWidth || !screen.naturalHeight) {
+    const surface = activeSurface();
+    if (!surface.width || !surface.height) {
       return undefined;
     }
     const rect = contentRect();
     const x = (clientX - rect.left) / rect.scale;
     const y = (clientY - rect.top) / rect.scale;
-    if (x < 0 || y < 0 || x >= screen.naturalWidth || y >= screen.naturalHeight) {
+    if (x < 0 || y < 0 || x >= surface.width || y >= surface.height) {
       return undefined;
     }
     return { x: Math.round(x), y: Math.round(y) };
@@ -183,16 +194,16 @@
 
   let gestureStart;
 
-  screen.addEventListener("pointerdown", (event) => {
+  function onScreenPointerDown(event) {
     const point = toDeviceCoords(event.clientX, event.clientY);
     if (!point) {
       return;
     }
     gestureStart = { point, time: Date.now(), pointerId: event.pointerId };
-    screen.setPointerCapture(event.pointerId);
-  });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
 
-  screen.addEventListener("pointerup", (event) => {
+  function onScreenPointerUp(event) {
     if (!gestureStart || event.pointerId !== gestureStart.pointerId) {
       return;
     }
@@ -237,11 +248,15 @@
     if (!recording) {
       deviceStatus.textContent = describeGesture(message);
     }
-  });
+  }
 
-  screen.addEventListener("pointercancel", () => {
-    gestureStart = undefined;
-  });
+  for (const surface of [screen, screenCanvas]) {
+    surface.addEventListener("pointerdown", onScreenPointerDown);
+    surface.addEventListener("pointerup", onScreenPointerUp);
+    surface.addEventListener("pointercancel", () => {
+      gestureStart = undefined;
+    });
+  }
 
   // Android navigation bar: back, home, recents.
   for (const btn of document.querySelectorAll(".nav-btn")) {
@@ -265,6 +280,132 @@
       return "long press " + message.x + "," + message.y;
     }
     return "tap " + message.x + "," + message.y;
+  }
+
+  // ---- video decoding -------------------------------------------------------
+
+  const canvasCtx = screenCanvas.getContext("2d");
+  let decoder;
+  let decoderCodec;
+  let awaitingKey = true;
+  let videoTimestamp = 0;
+  let decodeErrors = 0;
+  let lastDecodeErrorAt = 0;
+
+  // A decode error usually means one corrupt frame (e.g. a frame truncated
+  // by the idle flush), not a broken pipeline. Recover by restarting the
+  // stream for a fresh keyframe; only give up after repeated failures.
+  function onDecodeError(message) {
+    const now = Date.now();
+    if (now - lastDecodeErrorAt > 60000) {
+      decodeErrors = 0;
+    }
+    lastDecodeErrorAt = now;
+    decodeErrors++;
+    if (decoder && decoder.state !== "closed") {
+      decoder.close();
+    }
+    decoder = undefined;
+    awaitingKey = true;
+    if (decodeErrors >= 3) {
+      vscode.postMessage({ type: "videoError", message });
+    } else {
+      deviceStatus.textContent = "video hiccup, resyncing";
+      vscode.postMessage({ type: "videoRestart" });
+    }
+  }
+
+  function showSurface(mode) {
+    screenMode = mode;
+    if (mode === "video") {
+      screen.classList.remove("live");
+    } else {
+      screenCanvas.classList.remove("live");
+      if (decoder && decoder.state !== "closed") {
+        decoder.close();
+      }
+      decoder = undefined;
+    }
+  }
+
+  function onDecodedFrame(frame) {
+    if (
+      screenCanvas.width !== frame.displayWidth ||
+      screenCanvas.height !== frame.displayHeight
+    ) {
+      screenCanvas.width = frame.displayWidth;
+      screenCanvas.height = frame.displayHeight;
+      deviceStatus.textContent =
+        "video " + frame.displayWidth + "x" + frame.displayHeight;
+    }
+    canvasCtx.drawImage(frame, 0, 0);
+    frame.close();
+    screenCanvas.classList.add("live");
+    screenOverlay.classList.add("hidden");
+  }
+
+  function ensureDecoder(codec) {
+    if (decoder && decoder.state === "configured" && decoderCodec === codec) {
+      return true;
+    }
+    if (decoder && decoder.state !== "closed") {
+      decoder.close();
+    }
+    try {
+      decoder = new VideoDecoder({
+        output: onDecodedFrame,
+        error: (e) => onDecodeError(e.message),
+      });
+      decoder.configure({ codec, optimizeForLatency: true });
+      decoderCodec = codec;
+      awaitingKey = true;
+      return true;
+    } catch (e) {
+      // configure() rejecting the codec is not recoverable by restarting.
+      vscode.postMessage({ type: "videoError", message: e.message });
+      return false;
+    }
+  }
+
+  let keyStallSince;
+
+  function onVideoChunk(message) {
+    if (screenMode !== "video" || !message.codec) {
+      return;
+    }
+    if (!ensureDecoder(message.codec)) {
+      return;
+    }
+    if (awaitingKey && !message.key) {
+      // screenrecord sends exactly one keyframe per stream, at the start.
+      // If we are dropping deltas without one, the stream began before this
+      // decoder did; ask for a restart instead of freezing until rollover.
+      const now = Date.now();
+      if (!keyStallSince) {
+        keyStallSince = now;
+      } else if (now - keyStallSince > 1500) {
+        keyStallSince = undefined;
+        vscode.postMessage({ type: "videoRestart" });
+      }
+      return;
+    }
+    keyStallSince = undefined;
+    awaitingKey = false;
+    const data =
+      message.data instanceof ArrayBuffer
+        ? new Uint8Array(message.data)
+        : new Uint8Array(message.data.data || message.data);
+    try {
+      decoder.decode(
+        new EncodedVideoChunk({
+          type: message.key ? "key" : "delta",
+          timestamp: (videoTimestamp += 33333),
+          data,
+        })
+      );
+    } catch (e) {
+      onDecodeError(e.message);
+    }
   }
 
   // ---- logcat ---------------------------------------------------------------
@@ -342,10 +483,21 @@
       case "devices":
         renderDevices(message.devices, message.selected, message.error);
         break;
+      case "screenMode":
+        showSurface(message.mode);
+        break;
+      case "video":
+        onVideoChunk(message);
+        break;
+      case "screenModeNotice":
+        deviceStatus.textContent = message.text;
+        break;
       case "screen":
-        screen.src = message.dataUri;
-        screen.classList.add("live");
-        screenOverlay.classList.add("hidden");
+        if (screenMode === "screenshots") {
+          screen.src = message.dataUri;
+          screen.classList.add("live");
+          screenOverlay.classList.add("hidden");
+        }
         break;
       case "screenError":
         screen.classList.remove("live");
@@ -416,5 +568,8 @@
     }
   });
 
-  vscode.postMessage({ type: "ready" });
+  vscode.postMessage({
+    type: "ready",
+    webCodecs: typeof VideoDecoder === "function",
+  });
 })();

@@ -174,7 +174,8 @@ select {
   padding: 8px;
 }
 
-#screen {
+#screen,
+#screenCanvas {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -189,11 +190,13 @@ select {
   display: none;
 }
 
-#screen.live {
+#screen.live,
+#screenCanvas.live {
   display: block;
 }
 
-.screen-wrap.recording #screen {
+.screen-wrap.recording #screen,
+.screen-wrap.recording #screenCanvas {
   outline: 2px solid var(--vscode-inputValidation-errorBorder, #be1100);
   outline-offset: 2px;
 }
