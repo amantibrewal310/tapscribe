@@ -2,7 +2,7 @@
   "name": "tapscribe",
   "displayName": "TapScribe",
   "description": "Write mobile UI tests in plain English or record them by tapping the emulator screen, with live device video and logcat side by side.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "amantibrewal310",
   "license": "MIT",
   "author": {
@@ -83,6 +83,28 @@
           "default": 5000,
           "minimum": 100,
           "description": "Maximum number of logcat lines kept in the log panel."
+        },
+        "tapscribe.screenMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "video",
+            "screenshots"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "Video when the device and editor support it, otherwise screenshots.",
+            "Always stream H.264 video via screenrecord.",
+            "Always poll screenshots via screencap."
+          ],
+          "description": "How the device screen is mirrored."
+        },
+        "tapscribe.videoBitrateMbps": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Bitrate for the H.264 video stream, in megabits per second."
         }
       }
     }

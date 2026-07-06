@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { AdbClient, KEY_MAP } from "./adb";
 import { parseScript, stepToSource, Step } from "./script/parser";
 import { ScriptRunner } from "./script/runner";
+import { AnnexBParser } from "./video/h264";
 
 interface GestureMessage {
   type: "gesture";
@@ -46,6 +47,15 @@ export class TestLabPanel {
   private capturing = false;
   private screenFailures = 0;
 
+  private screenMode: "video" | "screenshots" = "screenshots";
+  private webCodecsAvailable = false;
+  private screenrecord: ChildProcess | undefined;
+  private videoParser = new AnnexBParser();
+  private videoFlushTimer: NodeJS.Timeout | undefined;
+  private videoChunksSent = 0;
+  private videoFailures = 0;
+  private videoStopping = false;
+
   public static createOrShow(extensionUri: vscode.Uri): void {
     if (TestLabPanel.current) {
       TestLabPanel.current.panel.reveal();
@@ -79,8 +89,8 @@ export class TestLabPanel {
     vscode.workspace.onDidChangeConfiguration(
       (event) => {
         if (event.affectsConfiguration("tapscribe")) {
-          this.adb.setDevice(this.adb.device); // keep device, refresh the rest
-          this.restartScreenLoop();
+          this.videoFailures = 0;
+          this.startScreenPipeline();
         }
       },
       null,
@@ -101,8 +111,9 @@ export class TestLabPanel {
   private async onMessage(message: any): Promise<void> {
     switch (message.type) {
       case "ready":
+        this.webCodecsAvailable = Boolean(message.webCodecs);
         await this.refreshDevices();
-        this.restartScreenLoop();
+        this.startScreenPipeline();
         break;
       case "refreshDevices":
         await this.refreshDevices();
@@ -110,8 +121,14 @@ export class TestLabPanel {
       case "selectDevice":
         this.adb.setDevice(message.serial || undefined);
         this.screenFailures = 0;
+        this.videoFailures = 0;
         this.restartLogcat();
         void this.wakeDevice();
+        this.startScreenPipeline();
+        break;
+      case "videoError":
+        // The webview decoder gave up; drop to screenshots for this session.
+        this.fallbackToScreenshots(String(message.message ?? "decode error"));
         break;
       case "run":
         await this.runScript(String(message.script ?? ""));
@@ -295,11 +312,121 @@ export class TestLabPanel {
 
   // ---- device screen ----------------------------------------------------
 
-  private restartScreenLoop(): void {
+  /**
+   * Picks video or screenshot mode from the setting and webview capability,
+   * then (re)starts whichever pipeline applies. Safe to call repeatedly.
+   */
+  private startScreenPipeline(): void {
+    const preference = this.config<string>("screenMode", "auto");
+    const wantVideo =
+      preference === "video" ||
+      (preference === "auto" && this.webCodecsAvailable && this.videoFailures < 3);
+    this.screenMode = wantVideo ? "video" : "screenshots";
+    this.post({ type: "screenMode", mode: this.screenMode });
+    if (this.screenMode === "video") {
+      this.stopScreenLoop();
+      this.startVideo();
+    } else {
+      this.stopVideo();
+      this.restartScreenLoop();
+    }
+  }
+
+  private fallbackToScreenshots(reason: string): void {
+    this.videoFailures = 99;
+    this.stopVideo();
+    this.screenMode = "screenshots";
+    this.post({ type: "screenMode", mode: this.screenMode });
+    this.post({
+      type: "screenModeNotice",
+      text: `Video stream unavailable (${reason}); using screenshots.`,
+    });
+    this.restartScreenLoop();
+  }
+
+  private startVideo(): void {
+    this.stopVideo();
+    if (!this.adb.device) {
+      return;
+    }
+    this.videoStopping = false;
+    this.videoChunksSent = 0;
+    this.videoParser.reset();
+    const bitrate = this.config<number>("videoBitrateMbps", 8);
+    const startedAt = Date.now();
+    this.screenrecord = this.adb.streamScreenrecord(
+      bitrate,
+      (bytes) => {
+        this.sendVideoChunks(this.videoParser.push(bytes));
+        // screenrecord goes quiet on a static screen; flush the trailing
+        // frame once the burst has clearly ended.
+        if (this.videoFlushTimer) {
+          clearTimeout(this.videoFlushTimer);
+        }
+        this.videoFlushTimer = setTimeout(() => {
+          this.sendVideoChunks(this.videoParser.flush());
+        }, 120);
+      },
+      (_code, stderr) => {
+        if (this.videoStopping) {
+          return;
+        }
+        const lived = Date.now() - startedAt;
+        if (lived < 5000 && this.videoChunksSent === 0) {
+          // Died immediately without producing anything: screenrecord or
+          // the h264 output format is not usable on this device.
+          this.videoFailures++;
+          if (this.videoFailures >= 3) {
+            this.fallbackToScreenshots(stderr || "screenrecord failed");
+            return;
+          }
+        } else {
+          this.videoFailures = 0;
+        }
+        // Normal three-minute rollover (or transient death): start again.
+        setTimeout(() => {
+          if (!this.videoStopping && this.screenMode === "video") {
+            this.startVideo();
+          }
+        }, 250);
+      }
+    );
+  }
+
+  private sendVideoChunks(chunks: { data: Buffer; key: boolean }[]): void {
+    for (const chunk of chunks) {
+      this.videoChunksSent++;
+      this.post({
+        type: "video",
+        key: chunk.key,
+        codec: this.videoParser.codec,
+        data: chunk.data.buffer.slice(
+          chunk.data.byteOffset,
+          chunk.data.byteOffset + chunk.data.byteLength
+        ),
+      });
+    }
+  }
+
+  private stopVideo(): void {
+    this.videoStopping = true;
+    if (this.videoFlushTimer) {
+      clearTimeout(this.videoFlushTimer);
+      this.videoFlushTimer = undefined;
+    }
+    this.screenrecord?.kill();
+    this.screenrecord = undefined;
+  }
+
+  private stopScreenLoop(): void {
     if (this.screenTimer) {
       clearTimeout(this.screenTimer);
       this.screenTimer = undefined;
     }
+  }
+
+  private restartScreenLoop(): void {
+    this.stopScreenLoop();
     this.scheduleCapture(0);
   }
 
@@ -316,6 +443,9 @@ export class TestLabPanel {
    * configured cadence instead of a fixed timer's worst-case latency.
    */
   private async captureLoopTick(): Promise<void> {
+    if (this.screenMode !== "screenshots") {
+      return;
+    }
     const interval = Math.max(150, this.config<number>("screenRefreshMs", 400));
     const started = Date.now();
     await this.captureScreen();
@@ -325,7 +455,9 @@ export class TestLabPanel {
 
   /** Captures immediately, used after gestures and steps for fast echo. */
   private captureNow(): void {
-    this.scheduleCapture(0);
+    if (this.screenMode === "screenshots") {
+      this.scheduleCapture(0);
+    }
   }
 
   private async captureScreen(): Promise<void> {
@@ -470,6 +602,7 @@ swipe up
       </header>
       <div id="screenWrap" class="screen-wrap">
         <img id="screen" alt="Device screen" draggable="false">
+        <canvas id="screenCanvas" aria-label="Device screen"></canvas>
         <div id="screenOverlay" class="screen-overlay">Waiting for a device.
 Start an emulator or plug in a phone, then hit Refresh.</div>
       </div>
@@ -490,10 +623,8 @@ Start an emulator or plug in a phone, then hit Refresh.</div>
     TestLabPanel.current = undefined;
     this.runner.stop();
     this.stopLogcat();
-    if (this.screenTimer) {
-      clearTimeout(this.screenTimer);
-      this.screenTimer = undefined;
-    }
+    this.stopVideo();
+    this.stopScreenLoop();
     for (const d of this.disposables) {
       d.dispose();
     }
