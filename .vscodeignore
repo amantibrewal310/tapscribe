@@ -3,6 +3,8 @@
 .github/**
 src/**
 scripts/**
+docs/**
+examples/**
 out/test/**
 .gitignore
 .yarnrc
