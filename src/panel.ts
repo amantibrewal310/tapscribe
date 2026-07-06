@@ -55,6 +55,7 @@ export class TestLabPanel {
   private videoChunksSent = 0;
   private videoFailures = 0;
   private videoStopping = false;
+  private lastVideoRestart = 0;
 
   public static createOrShow(extensionUri: vscode.Uri): void {
     if (TestLabPanel.current) {
@@ -129,6 +130,17 @@ export class TestLabPanel {
       case "videoError":
         // The webview decoder gave up; drop to screenshots for this session.
         this.fallbackToScreenshots(String(message.message ?? "decode error"));
+        break;
+      case "videoRestart":
+        // The decoder joined mid-stream and needs a fresh keyframe, which
+        // only a new screenrecord provides. Rate-limited against loops.
+        if (
+          this.screenMode === "video" &&
+          Date.now() - this.lastVideoRestart > 5000
+        ) {
+          this.lastVideoRestart = Date.now();
+          this.startVideo();
+        }
         break;
       case "run":
         await this.runScript(String(message.script ?? ""));

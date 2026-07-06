@@ -6,7 +6,13 @@ wait 2s
 
 # The search bar sits near the top on stock Android.
 tap 540 200
-wait 1s
+# Give the search screen time to open and focus its input field:
+# typing while the animation runs drops the first characters.
+wait 2s
+# Settings remembers the last query; tap its clear (x) button so reruns
+# start from an empty field. Harmless when the field is already empty.
+tap 1005 230
+wait 500ms
 type "battery"
 wait 1s
 press back

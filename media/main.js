@@ -310,6 +310,8 @@
     ) {
       screenCanvas.width = frame.displayWidth;
       screenCanvas.height = frame.displayHeight;
+      deviceStatus.textContent =
+        "video " + frame.displayWidth + "x" + frame.displayHeight;
     }
     canvasCtx.drawImage(frame, 0, 0);
     frame.close();
@@ -341,6 +343,8 @@
     }
   }
 
+  let keyStallSince;
+
   function onVideoChunk(message) {
     if (screenMode !== "video" || !message.codec) {
       return;
@@ -349,8 +353,19 @@
       return;
     }
     if (awaitingKey && !message.key) {
+      // screenrecord sends exactly one keyframe per stream, at the start.
+      // If we are dropping deltas without one, the stream began before this
+      // decoder did; ask for a restart instead of freezing until rollover.
+      const now = Date.now();
+      if (!keyStallSince) {
+        keyStallSince = now;
+      } else if (now - keyStallSince > 1500) {
+        keyStallSince = undefined;
+        vscode.postMessage({ type: "videoRestart" });
+      }
       return;
     }
+    keyStallSince = undefined;
     awaitingKey = false;
     const data =
       message.data instanceof ArrayBuffer

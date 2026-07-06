@@ -109,6 +109,20 @@ Press F5 in VS Code to launch an Extension Development Host. `npm test` runs the
 
 The design is documented in [docs/architecture.md](docs/architecture.md), and the reasoning behind the bigger choices (including the ones reversed after testing on a real emulator) lives in [docs/decisions/](docs/decisions/).
 
+## Troubleshooting
+
+**Typed text loses its first characters** (`battery` arrives as `tery`):
+the `type` step fires as soon as the previous step finishes, but Android
+needs a moment to focus a text field after you tap it, and keystrokes sent
+during that animation are dropped. Put a `wait 2s` between tapping a field
+and typing into it.
+
+**The screen view freezes or lags behind the device**: check the status
+line under the screen. In video mode it recovers on its own within a
+couple of seconds (the stream restarts to get a fresh keyframe); if it
+says screenshots, the device could not stream video and updates arrive at
+the polling rate instead.
+
 ## Limitations
 
 - `input text` handles ASCII only; emoji and non-Latin text will not type correctly
