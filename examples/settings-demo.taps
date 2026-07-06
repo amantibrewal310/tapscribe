@@ -1,0 +1,17 @@
+# Demo: open Android settings, search for "battery", then come home.
+# Run it from the TapScribe Test Lab with an emulator running.
+
+launch com.android.settings
+wait 2s
+
+# The search bar sits near the top on stock Android.
+tap 540 200
+wait 1s
+type "battery"
+wait 1s
+press back
+press back
+press home
+
+# Cleanup
+stop com.android.settings

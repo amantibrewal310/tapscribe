@@ -1,1 +1,0 @@
-Create a VS Code extension that streamlines mobile automation testing with an integrated three-panel interface for test script editing, interactive emulator visualization, and real-time log analysis to accelerate the test creation and debugging workflow.

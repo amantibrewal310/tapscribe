@@ -1,25 +1,91 @@
 {
-  "name": "app-testing-vscode-extension",
-  "displayName": "app-testing-vscode-extension",
-  "description": "",
-  "version": "0.0.1",
+  "name": "tapscribe",
+  "displayName": "TapScribe",
+  "description": "Write mobile UI tests in plain English or record them by tapping the emulator screen, with live device video and logcat side by side.",
+  "version": "0.1.0",
+  "publisher": "amantibrewal310",
+  "license": "MIT",
+  "author": {
+    "name": "Aman Tibrewal"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amantibrewal310/tapscribe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amantibrewal310/tapscribe/issues"
+  },
   "engines": {
     "vscode": "^1.98.0"
   },
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#161a2e",
+    "theme": "dark"
+  },
   "categories": [
-    "Other"
+    "Testing"
   ],
-  "activationEvents": [
-    "onCommand:app-testing-vscode-extension.showEmulator"
+  "keywords": [
+    "android",
+    "adb",
+    "emulator",
+    "mobile testing",
+    "ui testing",
+    "test recorder",
+    "logcat",
+    "automation"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "app-testing-vscode-extension.showEmulator",
-        "title": "Show Android Emulator"
+        "command": "tapscribe.openTestLab",
+        "category": "TapScribe",
+        "title": "Open Test Lab"
       }
-    ]
+    ],
+    "languages": [
+      {
+        "id": "tapscribe",
+        "aliases": [
+          "TapScribe Script"
+        ],
+        "extensions": [
+          ".taps"
+        ],
+        "configuration": "./language/language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tapscribe",
+        "scopeName": "source.tapscribe",
+        "path": "./language/tapscribe.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "TapScribe",
+      "properties": {
+        "tapscribe.adbPath": {
+          "type": "string",
+          "default": "adb",
+          "description": "Path to the adb executable. Leave as \"adb\" when it is on PATH."
+        },
+        "tapscribe.screenRefreshMs": {
+          "type": "number",
+          "default": 400,
+          "minimum": 150,
+          "description": "Delay between screen captures, in milliseconds, measured from the end of the previous capture. Lower is smoother but works adb harder."
+        },
+        "tapscribe.logBufferLines": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 100,
+          "description": "Maximum number of logcat lines kept in the log panel."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -27,17 +93,19 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "package": "vsce package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.98.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/vscode": "^1.98.0",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
-    "eslint": "^9.21.0",
-    "typescript": "^5.7.3",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.9.2",
+    "eslint": "^9.21.0",
+    "typescript": "^5.7.3"
   }
 }
