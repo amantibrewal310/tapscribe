@@ -123,6 +123,12 @@ couple of seconds (the stream restarts to get a fresh keyframe); if it
 says screenshots, the device could not stream video and updates arrive at
 the polling rate instead.
 
+**"Video stream unavailable ...; using screenshots"**: the video decoder
+failed three times in a row and TapScribe stopped retrying for this
+session. Single hiccups recover automatically; the repeated-failure
+fallback keeps a broken encoder from flickering. To try video again,
+change any TapScribe setting or reopen the Test Lab.
+
 ## Limitations
 
 - `input text` handles ASCII only; emoji and non-Latin text will not type correctly

@@ -289,6 +289,31 @@
   let decoderCodec;
   let awaitingKey = true;
   let videoTimestamp = 0;
+  let decodeErrors = 0;
+  let lastDecodeErrorAt = 0;
+
+  // A decode error usually means one corrupt frame (e.g. a frame truncated
+  // by the idle flush), not a broken pipeline. Recover by restarting the
+  // stream for a fresh keyframe; only give up after repeated failures.
+  function onDecodeError(message) {
+    const now = Date.now();
+    if (now - lastDecodeErrorAt > 60000) {
+      decodeErrors = 0;
+    }
+    lastDecodeErrorAt = now;
+    decodeErrors++;
+    if (decoder && decoder.state !== "closed") {
+      decoder.close();
+    }
+    decoder = undefined;
+    awaitingKey = true;
+    if (decodeErrors >= 3) {
+      vscode.postMessage({ type: "videoError", message });
+    } else {
+      deviceStatus.textContent = "video hiccup, resyncing";
+      vscode.postMessage({ type: "videoRestart" });
+    }
+  }
 
   function showSurface(mode) {
     screenMode = mode;
@@ -329,15 +354,14 @@
     try {
       decoder = new VideoDecoder({
         output: onDecodedFrame,
-        error: (e) => {
-          vscode.postMessage({ type: "videoError", message: e.message });
-        },
+        error: (e) => onDecodeError(e.message),
       });
       decoder.configure({ codec, optimizeForLatency: true });
       decoderCodec = codec;
       awaitingKey = true;
       return true;
     } catch (e) {
+      // configure() rejecting the codec is not recoverable by restarting.
       vscode.postMessage({ type: "videoError", message: e.message });
       return false;
     }
@@ -380,7 +404,7 @@
         })
       );
     } catch (e) {
-      vscode.postMessage({ type: "videoError", message: e.message });
+      onDecodeError(e.message);
     }
   }
 

@@ -375,9 +375,11 @@ export class TestLabPanel {
         if (this.videoFlushTimer) {
           clearTimeout(this.videoFlushTimer);
         }
+        // Long enough that adb stalling mid-frame will not get flushed as
+        // a truncated NAL, short enough to feel instant on a static screen.
         this.videoFlushTimer = setTimeout(() => {
           this.sendVideoChunks(this.videoParser.flush());
-        }, 120);
+        }, 250);
       },
       (_code, stderr) => {
         if (this.videoStopping) {
