@@ -107,6 +107,8 @@ npm run watch     # compile on change
 
 Press F5 in VS Code to launch an Extension Development Host. `npm test` runs the suite (it downloads a VS Code build on first run), and `npm run lint` checks the source.
 
+The design is documented in [docs/architecture.md](docs/architecture.md), and the reasoning behind the bigger choices (including the ones reversed after testing on a real emulator) lives in [docs/decisions/](docs/decisions/).
+
 ## Limitations
 
 - `input text` handles ASCII only; emoji and non-Latin text will not type correctly
