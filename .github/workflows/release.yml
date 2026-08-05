@@ -1,0 +1,53 @@
+name: release
+
+# Publishes to the VS Code Marketplace when a v* tag is pushed, e.g.
+#   git tag v0.3.0 && git push origin v0.3.0
+#
+# Requires a repository secret named VSCE_PAT: an Azure DevOps personal access
+# token, scoped to Marketplace > Manage, for the publisher named in
+# package.json. The token is issued to a person, not the repo, so it has to be
+# created by hand and rotated when it expires.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run compile
+      # vscode-test needs a display server on Linux.
+      - run: xvfb-run -a npm test
+
+      # A tag that disagrees with package.json would publish the wrong version.
+      - name: Check the tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "$manifest" ]; then
+            echo "tag $tag does not match package.json $manifest" >&2
+            exit 1
+          fi
+
+      - run: npx vsce package
+
+      - name: Publish to the Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath *.vsix
+
+      - name: Attach the vsix to a GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" *.vsix --generate-notes
