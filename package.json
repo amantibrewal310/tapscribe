@@ -2,7 +2,7 @@
   "name": "tapscribe",
   "displayName": "TapScribe",
   "description": "Write mobile UI tests in plain English or record them by tapping the emulator screen, with live device video and logcat side by side.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "amantibrewal310",
   "license": "MIT",
   "author": {
@@ -124,8 +124,8 @@
     "@types/vscode": "^1.98.0",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
     "eslint": "^9.21.0",
     "typescript": "^5.7.3"

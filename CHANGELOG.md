@@ -4,6 +4,37 @@ All notable changes to TapScribe are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [0.3.0] - 2026-08-05
+
+### Fixed
+
+- The device screen stayed blank in video mode when a device was connected
+  after the Test Lab was already open. Refreshing the device list now restarts
+  the screen pipeline, which previously only the device picker did.
+- Taps and swipes landed in the wrong place on devices with a display size
+  override (the Pixel "screen resolution" setting, or `wm size`). Capture
+  returns physical pixels while touches use the logical display, and the
+  content is letterboxed between the two; gestures are now mapped through the
+  input viewport instead of being passed through as bitmap coordinates.
+- `screenrecord` kept streaming, and the webview kept decoding, while the Test
+  Lab tab was in the background. Video now stops when the panel is hidden and
+  resumes with a fresh keyframe when it comes back.
+- A stale "adb not reachable" message could sit over the screen after a device
+  reappeared.
+
+### Changed
+
+- The webview CSP nonce comes from `crypto.randomBytes` instead of
+  `Math.random()`.
+
+### Internal
+
+- `npm test` works again on a fresh clone: `@vscode/test-electron` 2.x looked
+  for a macOS `Electron` binary that current VS Code no longer ships.
+- Video support is covered end to end, decoding recorded device bytes through
+  WebCodecs in a real webview, alongside unit tests for the new coordinate
+  mapping. 33 tests to 51.
+
 ## [0.2.0] - 2026-07-06
 
 ### Added

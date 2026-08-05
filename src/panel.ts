@@ -1,6 +1,7 @@
 import { ChildProcess } from "child_process";
+import { randomBytes } from "crypto";
 import * as vscode from "vscode";
-import { AdbClient, KEY_MAP } from "./adb";
+import { AdbClient, frameToTouch, InputGeometry, KEY_MAP } from "./adb";
 import { parseScript, stepToSource, Step } from "./script/parser";
 import { ScriptRunner } from "./script/runner";
 import { AnnexBParser } from "./video/h264";
@@ -13,18 +14,15 @@ interface GestureMessage {
   x2?: number;
   y2?: number;
   durationMs?: number;
+  /** Bitmap the coordinates were measured against, for touch-space mapping. */
+  srcWidth?: number;
+  srcHeight?: number;
   /** True while record mode is on: the gesture also becomes a script step. */
   record?: boolean;
 }
 
 function getNonce(): string {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let nonce = "";
-  for (let i = 0; i < 32; i++) {
-    nonce += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return nonce;
+  return randomBytes(24).toString("base64");
 }
 
 /**
@@ -56,6 +54,7 @@ export class TestLabPanel {
   private videoFailures = 0;
   private videoStopping = false;
   private lastVideoRestart = 0;
+  private geometry: InputGeometry | undefined;
 
   public static createOrShow(extensionUri: vscode.Uri): void {
     if (TestLabPanel.current) {
@@ -82,6 +81,25 @@ export class TestLabPanel {
 
     this.panel.webview.html = this.renderHtml(extensionUri);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+    // retainContextWhenHidden keeps the webview alive in the background, so
+    // nothing else would stop screenrecord pushing megabits at a tab nobody
+    // is looking at. The screenshot loop already gates itself on visibility.
+    this.panel.onDidChangeViewState(
+      () => {
+        if (this.screenMode !== "video") {
+          return;
+        }
+        if (this.panel.visible) {
+          if (!this.screenrecord) {
+            this.startVideo();
+          }
+        } else {
+          this.stopVideo();
+        }
+      },
+      null,
+      this.disposables
+    );
     this.panel.webview.onDidReceiveMessage(
       (message) => this.onMessage(message),
       null,
@@ -123,6 +141,7 @@ export class TestLabPanel {
         this.adb.setDevice(message.serial || undefined);
         this.screenFailures = 0;
         this.videoFailures = 0;
+        this.geometry = undefined;
         this.restartLogcat();
         void this.wakeDevice();
         this.startScreenPipeline();
@@ -190,10 +209,20 @@ export class TestLabPanel {
       const devices = (await this.adb.listDevices()).filter(
         (d) => d.state === "device"
       );
-      if (!this.adb.device || !devices.some((d) => d.serial === this.adb.device)) {
+      const previous = this.adb.device;
+      if (!previous || !devices.some((d) => d.serial === previous)) {
         this.adb.setDevice(devices[0]?.serial);
+        this.geometry = undefined;
         this.restartLogcat();
         void this.wakeDevice();
+        // The screenshot loop reschedules itself and picks a new device up on
+        // its own, but the video pipeline is started once and would otherwise
+        // stay dead for a device that appeared after the panel opened.
+        if (this.adb.device !== previous) {
+          this.screenFailures = 0;
+          this.videoFailures = 0;
+          this.startScreenPipeline();
+        }
       }
       this.post({ type: "devices", devices, selected: this.adb.device });
       if (!this.logcat && this.adb.device) {
@@ -239,29 +268,57 @@ export class TestLabPanel {
     this.post({ type: "runFinished", ...summary });
   }
 
+  /**
+   * Resolves a point on the mirrored screen into the coordinate space touches
+   * use. Without a usable frame size or geometry the point is passed through,
+   * which is correct on every device where capture and touch spaces agree.
+   */
+  private async toTouch(
+    x: number,
+    y: number,
+    message: GestureMessage
+  ): Promise<{ x: number; y: number }> {
+    const frame = { width: message.srcWidth ?? 0, height: message.srcHeight ?? 0 };
+    if (frame.width <= 0 || frame.height <= 0) {
+      return { x, y };
+    }
+    try {
+      this.geometry ??= await this.adb.inputGeometry();
+    } catch {
+      return { x, y };
+    }
+    return frameToTouch(x, y, frame, this.geometry);
+  }
+
   private async onGesture(message: GestureMessage): Promise<void> {
     if (!this.adb.device) {
       return;
     }
+    const start = await this.toTouch(message.x, message.y, message);
     let step: Step;
     if (message.gesture === "swipe") {
+      const end = await this.toTouch(
+        message.x2 ?? message.x,
+        message.y2 ?? message.y,
+        message
+      );
       step = {
         kind: "swipeCoords",
-        x1: message.x,
-        y1: message.y,
-        x2: message.x2 ?? message.x,
-        y2: message.y2 ?? message.y,
+        x1: start.x,
+        y1: start.y,
+        x2: end.x,
+        y2: end.y,
         durationMs: Math.max(50, Math.min(2000, message.durationMs ?? 300)),
       };
     } else if (message.gesture === "longpress") {
       step = {
         kind: "longpress",
-        x: message.x,
-        y: message.y,
+        x: start.x,
+        y: start.y,
         durationMs: Math.max(400, Math.min(3000, message.durationMs ?? 600)),
       };
     } else {
-      step = { kind: "tap", x: message.x, y: message.y };
+      step = { kind: "tap", x: start.x, y: start.y };
     }
     try {
       if (step.kind === "tap") {
@@ -358,7 +415,7 @@ export class TestLabPanel {
 
   private startVideo(): void {
     this.stopVideo();
-    if (!this.adb.device) {
+    if (!this.adb.device || !this.panel.visible) {
       return;
     }
     this.videoStopping = false;

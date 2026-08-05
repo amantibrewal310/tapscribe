@@ -6,6 +6,8 @@ scripts/**
 docs/**
 examples/**
 out/test/**
+PRODUCT_DESIGN.md
+TECHNICAL_DESIGN.md
 .gitignore
 .yarnrc
 **/tsconfig.json

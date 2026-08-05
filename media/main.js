@@ -137,6 +137,9 @@
       deviceStatus.textContent = "";
       return;
     }
+    // A device is back: drop any "adb unavailable" text so a stale error does
+    // not sit over the screen until the first frame lands.
+    screenOverlay.textContent = "Connecting to " + (selected || "device") + "...";
     for (const device of devices) {
       const option = document.createElement("option");
       option.value = device.serial;
@@ -209,6 +212,7 @@
     }
     const start = gestureStart;
     gestureStart = undefined;
+    const surface = activeSurface();
     const end =
       toDeviceCoords(event.clientX, event.clientY) || start.point;
     const elapsed = Date.now() - start.time;
@@ -244,6 +248,10 @@
       };
     }
     message.record = recording;
+    // The host maps these onto touch coordinates, which are not always the
+    // same space as the captured bitmap.
+    message.srcWidth = surface.width;
+    message.srcHeight = surface.height;
     vscode.postMessage(message);
     if (!recording) {
       deviceStatus.textContent = describeGesture(message);

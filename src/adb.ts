@@ -11,6 +11,107 @@ export interface ScreenSize {
   height: number;
 }
 
+export interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * How a captured frame relates to the coordinate space `input tap` uses.
+ *
+ * These are not always the same space. `screencap` and `screenrecord` both
+ * hand back `deviceSize` pixels, but touches land in `logical` coordinates,
+ * and when a display size override is active the content sits letterboxed
+ * at `contentFrame` inside the captured image. Mapping a click on the
+ * mirrored screen back to a tap means going through all three.
+ */
+export interface InputGeometry {
+  /** The coordinate space `input tap`/`input swipe` expect. */
+  logical: ScreenSize;
+  /** Where the rendered content sits inside a captured frame. */
+  contentFrame: Rect;
+  /** The size of a captured frame at native scale. */
+  deviceSize: ScreenSize;
+}
+
+/** Builds the identity geometry: content fills the frame, 1:1 with touches. */
+export function identityGeometry(size: ScreenSize): InputGeometry {
+  return {
+    logical: size,
+    contentFrame: { left: 0, top: 0, width: size.width, height: size.height },
+    deviceSize: size,
+  };
+}
+
+const VIEWPORT_RE =
+  /Viewport (?:INTERNAL|MAIN)[^\n]*?displayId=0,[^\n]*?logicalFrame=\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\][^\n]*?physicalFrame=\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\][^\n]*?deviceSize=\[(\d+),\s*(\d+)\]/;
+
+/**
+ * Reads the display-0 viewport out of `dumpsys input`. Returns undefined when
+ * the line is missing or degenerate so callers can fall back to `wm size`.
+ */
+export function parseInputViewport(dump: string): InputGeometry | undefined {
+  const m = dump.match(VIEWPORT_RE);
+  if (!m) {
+    return undefined;
+  }
+  const n = m.slice(1).map(Number);
+  const [lLeft, lTop, lRight, lBottom] = n;
+  const [pLeft, pTop, pRight, pBottom] = n.slice(4);
+  const [dWidth, dHeight] = n.slice(8);
+  const geometry: InputGeometry = {
+    logical: { width: lRight - lLeft, height: lBottom - lTop },
+    contentFrame: {
+      left: pLeft,
+      top: pTop,
+      width: pRight - pLeft,
+      height: pBottom - pTop,
+    },
+    deviceSize: { width: dWidth, height: dHeight },
+  };
+  const positive =
+    geometry.logical.width > 0 &&
+    geometry.logical.height > 0 &&
+    geometry.contentFrame.width > 0 &&
+    geometry.contentFrame.height > 0 &&
+    geometry.deviceSize.width > 0 &&
+    geometry.deviceSize.height > 0;
+  return positive ? geometry : undefined;
+}
+
+/**
+ * Maps a point on a captured frame to the coordinate space touches use.
+ *
+ * `frame` is the bitmap the click was measured against, which may be smaller
+ * than `deviceSize` when screenrecord scales its output, so the content frame
+ * is rescaled to match before projecting.
+ */
+export function frameToTouch(
+  x: number,
+  y: number,
+  frame: ScreenSize,
+  geometry: InputGeometry
+): { x: number; y: number } {
+  const sx = frame.width / geometry.deviceSize.width;
+  const sy = frame.height / geometry.deviceSize.height;
+  const content = {
+    left: geometry.contentFrame.left * sx,
+    top: geometry.contentFrame.top * sy,
+    width: geometry.contentFrame.width * sx,
+    height: geometry.contentFrame.height * sy,
+  };
+  const fx = content.width > 0 ? (x - content.left) / content.width : 0;
+  const fy = content.height > 0 ? (y - content.top) / content.height : 0;
+  const clamp = (v: number, max: number) =>
+    Math.max(0, Math.min(max - 1, Math.round(v)));
+  return {
+    x: clamp(fx * geometry.logical.width, geometry.logical.width),
+    y: clamp(fy * geometry.logical.height, geometry.logical.height),
+  };
+}
+
 /** Android key names accepted by the script language, mapped to keycodes. */
 export const KEY_MAP: Record<string, string> = {
   back: "KEYCODE_BACK",
@@ -138,6 +239,46 @@ export class AdbClient {
     const match = override ?? physical;
     if (!match) {
       throw new AdbError(`Could not read screen size from: ${out.trim()}`);
+    }
+    return { width: Number(match[1]), height: Number(match[2]) };
+  }
+
+  /**
+   * Resolves how captured frames map onto touch coordinates. Prefers the
+   * input viewport, which is the only source that knows about letterboxing
+   * under a display size override; falls back to `wm size` when the dump is
+   * unavailable or in an unexpected shape.
+   */
+  async inputGeometry(): Promise<InputGeometry> {
+    try {
+      const dump = await this.exec(["shell", "dumpsys", "input"]);
+      const parsed = parseInputViewport(dump);
+      if (parsed) {
+        return parsed;
+      }
+    } catch {
+      // Fall through to wm size.
+    }
+    const logical = await this.screenSize();
+    const physical = await this.physicalSize().catch(() => logical);
+    return {
+      logical,
+      contentFrame: {
+        left: 0,
+        top: 0,
+        width: physical.width,
+        height: physical.height,
+      },
+      deviceSize: physical,
+    };
+  }
+
+  /** The un-overridden panel size, which is what capture returns. */
+  async physicalSize(): Promise<ScreenSize> {
+    const out = await this.exec(["shell", "wm", "size"]);
+    const match = out.match(/Physical size:\s*(\d+)x(\d+)/);
+    if (!match) {
+      throw new AdbError(`Could not read physical size from: ${out.trim()}`);
     }
     return { width: Number(match[1]), height: Number(match[2]) };
   }
